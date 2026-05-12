@@ -159,7 +159,10 @@ export async function main(): Promise<void> {
 if (process.argv[1]) {
   const currentFile = resolve(fileURLToPath(import.meta.url));
   const invokedFile = resolve(process.argv[1]);
-  if (currentFile === invokedFile) {
+  // Normalize for case-insensitive comparison on Windows
+  const currentFileNormalized = currentFile.toLowerCase();
+  const invokedFileNormalized = invokedFile.toLowerCase();
+  if (currentFileNormalized === invokedFileNormalized) {
     void main();
   }
 }
