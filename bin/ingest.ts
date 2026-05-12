@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { resolve, basename } from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import {
   importCopilotSessionStore,
   summarizeDatastore
@@ -156,6 +156,10 @@ export async function main(): Promise<void> {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  void main();
+if (process.argv[1]) {
+  const currentFile = resolve(fileURLToPath(import.meta.url));
+  const invokedFile = resolve(process.argv[1]);
+  if (currentFile === invokedFile) {
+    void main();
+  }
 }
