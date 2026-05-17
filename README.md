@@ -1,31 +1,72 @@
 # copilot-trace-importer
 
-**Import GitHub Copilot session events from local SQLite databases, JSONL files, and VS Code debug logs into a normalized, redacted local datastore.**
+**Local-first telemetry pipeline for AI coding tools — track every Copilot, Claude Code, Cursor, and Codex session, redacted by default, queryable, and warehouse-ready.**
 
-Transform Copilot telemetry into actionable insights: track token usage across sessions, analyze model invocation patterns, understand tool adoption, and prepare data for enterprise analytics—all with privacy-first redaction and offline-first design.
+`copilot-trace-importer` is the *pipeline layer* for AI-coding telemetry. It reads session data directly from disk, normalizes it into a versioned, OpenTelemetry-aligned schema, redacts sensitive material before persistence, and emits an append-only JSONL datastore that downstream tools — your dashboard, your warehouse, your compliance reports, or [codeburn](https://github.com/getagentseal/codeburn) — can consume.
+
+It is intentionally **not** a TUI dashboard. It is the boring, auditable layer your dashboard sits on top of.
+
+> **Status:** v0.1.0 (Beta). Today it ships first-class support for GitHub Copilot (CLI session store + VS Code Chat debug logs). Claude Code, Cursor, and Codex providers are on the near-term roadmap (Phase 2). See [PRD.md](PRD.md) for the full plan.
 
 **Status:** v0.1.0 (Beta) | **License:** MIT | **Node.js:** ≥22
 
 ---
 
+## What it is (and isn't)
+
+**It is:**
+- A local-first **importer / normalizer / redactor** for AI-coding session telemetry.
+- A pluggable **provider** layer (one file per source) emitting a single, versioned, OpenTelemetry-aligned event schema.
+- A **compliance-friendly** pipeline: redaction by default, per-event privacy classification, retention metadata, multi-machine provenance.
+- A substrate for **downstream consumers** — DuckDB / Parquet exports, warehouse pipelines, OTel collectors, and (as a courtesy) [codeburn](https://github.com/getagentseal/codeburn).
+
+**It is not:**
+- A TUI / web dashboard. If you want a beautiful per-developer cost dashboard, install [codeburn](https://github.com/getagentseal/codeburn) — it is excellent at exactly that, and we feed it rather than compete with it.
+- A live hook into Copilot. We import what Copilot already wrote to disk; we never instrument, proxy, or modify Copilot itself.
+- A pricing engine (yet). Cost enrichment via LiteLLM is on the Phase 3 roadmap; today we capture tokens and let downstream tools price them.
+
+---
+
 ## Overview
 
-### Why This Exists
+### Why this exists
 
-Copilot already records session data locally. This tool imports it *without* hook bootstrap, service dependencies, or repository modifications:
+Every AI coding tool already writes session data to disk. What's missing is a **boring, trusted layer** that:
 
-- `~/.copilot/session-store.db` — session metadata (SQLite)
-- `~/.copilot/session-state/<session-id>/events.jsonl` — event stream (JSONL)
-- VS Code GitHub Copilot Chat debug logs — IDE session telemetry
+1. **Imports it from every tool** into one normalized shape (today: Copilot; soon: Claude Code, Cursor, Codex).
+2. **Redacts it** before it ever leaves the local machine, with a policy you can audit.
+3. **Emits an append-only datastore** that warehouses, OTel collectors, and analyzer tooling can consume without each writing its own parser.
 
-### What You Get
+That's the wedge: regulated and platform teams need *governance and pipelines* far more than they need another dashboard. Developers who want a dashboard can `npm i -g codeburn` and have one in 30 seconds. We feed it.
 
-- ✅ **Append-only normalized datastore** — JSONL format, immutable history, no external DB required
-- ✅ **Rich metadata & facets** — Models, tokens, tools, files, agents, errors, debug signals
-- ✅ **Redaction by default** — Credentials, API keys, tokens, passwords stripped automatically
-- ✅ **Multi-machine & multi-session support** — Track usage across devices; tag with machine and user IDs
-- ✅ **CLI + Programmatic API** — Both command-line and npm library interfaces
-- ✅ **Cross-platform** — Works on macOS (Intel + Apple Silicon), Linux, Windows
+### What you get today
+
+- ✅ **Append-only normalized datastore** — JSONL, immutable, no external DB required
+- ✅ **Rich facets** — models, tokens, tools, files, agents, errors, debug signals
+- ✅ **Redaction by default** — credentials, API keys, tokens, passwords stripped before persistence
+- ✅ **Multi-machine & multi-session provenance** — tag every event with machine and user IDs
+- ✅ **CLI + programmatic API** — both shell scripts and npm library
+- ✅ **Cross-platform** — macOS (Intel + Apple Silicon), Linux, Windows
+
+### Relationship to [codeburn](https://github.com/getagentseal/codeburn)
+
+[codeburn](https://github.com/getagentseal/codeburn) is an excellent open-source TUI for "where do my AI coding tokens go?". It covers 19+ providers, prices every call with LiteLLM, and ships a polished Ink dashboard. **If you want a developer dashboard, install codeburn.** It is materially better than anything we plan to build in that lane.
+
+We are a **complement, not a competitor**. They are the UI; we are the pipe.
+
+| | `copilot-trace-importer` | `codeburn` |
+|---|---|---|
+| Primary job | Importer / normalizer / redactor / pipeline | TUI dashboard + cost reporting |
+| Output | Versioned, redacted, append-only JSONL datastore | Live terminal dashboard, exports, `optimize`/`yield`/`compare` reports |
+| Strengths | Schema stability, redaction-by-default, retention metadata, OTel alignment, multi-machine provenance, warehouse pipelines | Breadth (19+ tools), LiteLLM pricing, dashboard UX, deterministic task classifier, waste-finder |
+| Audience | Platform / data / compliance teams; anyone feeding a warehouse or OTel collector | Individual developers and teams who want a TUI |
+| Privacy posture | Redaction by default, classification + retention per event, policy-driven (roadmap) | Local-only by design; no formal redaction layer |
+
+**How to use them together (today and tomorrow):**
+- Today: import your Copilot sessions with `copilot-trace-importer`, archive the redacted JSONL into your warehouse or object store for audit. Run `codeburn` separately on your local disk for the dashboard.
+- Roadmap: a `codeburn-export` sink (Phase 4) and a starter pack of codeburn-style analyzers that run over our JSONL (Phase 6), so codeburn-style insights become available across *every* provider we ingest, with redaction already applied.
+
+We borrow gratefully from codeburn's hard-won lessons — provider-isolation pattern, Copilot model inference from tool-call ID prefixes, char-based token fallback, `messageId` dedup. Each is documented in the relevant ADR and per-provider quirks doc.
 
 ### Roadmap
 

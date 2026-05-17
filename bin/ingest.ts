@@ -1,11 +1,41 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve, basename } from "node:path";
+import { resolve, basename, dirname, join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import {
   importCopilotSessionStore,
   summarizeDatastore
 } from "../src/index.js";
+
+/**
+ * Resolve and return the package version from package.json. Reads at call
+ * time (not module load) so that test fixtures or future re-publishing
+ * tooling can swap the manifest without bundler help.
+ */
+export function getVersion(): string {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // bin/ingest.ts → ../package.json from source; dist/bin/ingest.js → ../../package.json once built.
+    const candidates = [
+      join(here, "..", "package.json"),
+      join(here, "..", "..", "package.json")
+    ];
+    for (const candidate of candidates) {
+      try {
+        const manifest = JSON.parse(readFileSync(candidate, "utf8")) as { version?: unknown };
+        if (typeof manifest.version === "string" && manifest.version.length > 0) {
+          return manifest.version;
+        }
+      } catch {
+        // try next candidate
+      }
+    }
+  } catch {
+    // fall through to unknown
+  }
+  return "unknown";
+}
 
 interface Args {
   command: "import" | "summary";
@@ -24,9 +54,12 @@ interface Args {
 
 function usage(): string {
   return [
+    `copilot-trace-importer v${getVersion()}`,
+    "",
     "Usage:",
     "  npm run datastore:import -- --db-path ~/.copilot/session-store.db --datastore ./datastore/events.jsonl",
     "  npm run datastore:summary -- --datastore ./datastore/events.jsonl",
+    "  copilot-trace-importer --version",
     "Options:",
     "  --db-path <path>      Path to local Copilot session-store.db",
     "  --datastore <path>    Append-only normalized event datastore JSONL path",
@@ -127,6 +160,10 @@ export function parseArgs(argv: string[]): Args {
 
 export async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  if (argv.includes("--version") || argv.includes("-v")) {
+    process.stdout.write(`${getVersion()}\n`);
+    return;
+  }
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(usage());
     return;
