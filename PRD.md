@@ -4,11 +4,15 @@
 
 **Product Name:** copilot-trace-importer
 
-**Summary:** A cross-platform tool for importing, normalizing, and analyzing GitHub Copilot session event data from local and IDE sources. It collects telemetry from `~/.copilot/session-store.db`, session event JSONL files, and VS Code debug logs, normalizes events into a redacted append-only datastore, and enables multi-session and multi-machine analytics for token usage optimization, model analysis, and pattern identification.
+**Summary:** A local-first **telemetry pipeline** for AI coding tools. It is the **importer / normalizer / redactor / sink layer** that sits between raw on-disk session data (Copilot, Claude Code, Cursor, Codex, …) and downstream consumers (warehouses, OpenTelemetry collectors, compliance reports, analyzer SDKs, and third-party dashboards such as [codeburn](https://github.com/getagentseal/codeburn)).
 
-**Target Platform:** 
+It collects telemetry from local sources — `~/.copilot/session-store.db`, per-session event JSONL files, VS Code Copilot Chat debug logs, and (Phase 2) Claude Code / Cursor / Codex on-disk transcripts — normalizes events into a versioned, OpenTelemetry-aligned schema, redacts sensitive material *before* persistence, and emits an append-only JSONL datastore suitable for multi-machine and multi-tool analytics, governance review, and warehouse ingest.
+
+**Positioning:** We are the *pipe*, not the dashboard. We deliberately do **not** compete with [codeburn](https://github.com/getagentseal/codeburn) on developer-facing TUI/UX. Our differentiation is schema stability, redaction-by-default, retention metadata, OTel alignment, multi-machine provenance, and pluggable sinks — the substrate a regulated organization or platform team needs in order to trust AI-coding telemetry. Developer dashboards (codeburn, future open-source UIs, internal dashboards) are downstream consumers of our datastore.
+
+**Target Platform:**
 - CLI: macOS, Linux, Windows (Node.js 22+)
-- Future: Backend API (TBD platform), Web UI (TBD), Cloud deployment (Azure, AWS)
+- Future: pluggable sinks (DuckDB, OTLP, Postgres, Azure Fabric, S3/Parquet), `watch`-mode streaming, analyzer SDK
 
 **Key Constraints:**
 - Redaction-by-default for sensitive data (configurable by policy)
@@ -16,6 +20,7 @@
 - Cross-platform path handling (especially Windows case-insensitivity)
 - 70%+ code coverage requirement
 - Financial institution compliance needs (GDPR, SOC2, etc.)
+- Provider-isolated parsers; unified output schema (see ADR-002)
 
 ---
 
@@ -51,6 +56,8 @@
 
 ### 3.2 Non-Goals
 
+- ✗ **Not a TUI / web dashboard.** We feed dashboards (yours, [codeburn](https://github.com/getagentseal/codeburn), internal); we do not build one as our primary UX. A `report` Markdown command (Phase 7) is the most we will ship in this lane.
+- ✗ **Not a competitor to codeburn.** Codeburn is the best-in-class developer dashboard for "where did my AI coding tokens go". We are the pipeline that can feed it across providers, with redaction already applied. Where features overlap (e.g. cost reporting), we ship them as *enrichers/sinks*, not as a UI.
 - ✗ Real-time hook into live Copilot sessions (import from stored data only)
 - ✗ Modifying or deleting Copilot session data
 - ✗ Replacing Copilot's own telemetry system
