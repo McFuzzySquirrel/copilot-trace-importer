@@ -29,6 +29,7 @@ It collects telemetry from local sources — `~/.copilot/session-store.db`, per-
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-05-13 | — | Comprehensive PRD based on v0.1.0, adding vision for real-time streaming, enterprise integration, and web UI |
+| 1.1 | 2026-05-17 | — | Synced with v0.2.0 (Unreleased): provider-isolated architecture (ADR-002), Copilot model inference & per-pass dedup & char-based token fallback (ADR-003), enrichment pipeline design (ADR-004), sink interface design (ADR-005), policy-based redaction design (ADR-006), `--version` flag, release workflow. Added explicit **Codeburn Alignment** commitments across every phase and a new Codeburn Alignment Matrix (§14.8). |
 
 ---
 
@@ -43,6 +44,15 @@ It collects telemetry from local sources — `~/.copilot/session-store.db`, per-
 - ✅ Provide CLI commands for import and summary with filtering support
 - ✅ Track multi-session and multi-machine provenance
 - ✅ Enable append-only, queryable JSONL datastore for downstream analytics
+
+**Shipped since v0.1.0 (v0.2.0 / Unreleased):**
+- ✅ **Provider-isolated architecture** (ADR-002): per-source files under `src/providers/` (`copilot-session-store`, `copilot-events-jsonl`, `vscode-chat-debug`); thin orchestrator in `src/index.ts`; per-provider quirks docs under `docs/providers/`.
+- ✅ **Copilot model inference from tool-call ID prefixes** (ADR-003): `toolu_*` → `anthropic`, `call_*` → `openai`; inferred values carry `confidence: "heuristic"` and never overwrite explicit values.
+- ✅ **Char-based output-token fallback** (ADR-003): `ceil(text.length / 4)` when `outputTokens` is absent — mirrors the codeburn fix.
+- ✅ **Per-import-pass deduplication** for Copilot events (ADR-003): collapse by `messageId`, or by `interactionId + firstToolCallId + sourceEventType` hash when absent; new `DatastoreImportResult.deduplicatedEvents` counter.
+- ✅ **`--version` / `-v` CLI flag** sourced from `package.json`.
+- ✅ **Release workflow** (`.github/workflows/release.yml`) that publishes to npm on Git tag push.
+- ✅ **ADR-004 (Enrichment Pipeline)**, **ADR-005 (Sink Interface)**, **ADR-006 (Policy-Based Redaction)** — design accepted; implementations deferred to Phases 3–5.
 
 **Roadmap (Future Phases):**
 - Real-time or near real-time updating of the datastore (streaming)
@@ -278,32 +288,52 @@ It collects telemetry from local sources — `~/.copilot/session-store.db`, per-
 
 ### 7.2 Project Structure
 
-**Current (v0.1.0):**
+**Current (v0.2.0 / Unreleased):**
 ```
 copilot-trace-importer/
 ├── bin/
-│   └── ingest.ts              # CLI entry point; arg parsing
+│   └── ingest.ts                  # CLI entry point; arg parsing; --version
 ├── src/
-│   ├── index.ts               # Core import/summary logic
+│   ├── index.ts                   # Thin orchestrator (~280 LOC); delegates to providers
+│   ├── providers/                 # Provider-isolated parsers (ADR-002)
+│   │   ├── index.ts               # BUILTIN_PROVIDERS registry
+│   │   ├── types.ts               # Provider interface + ProviderImportContext
+│   │   ├── copilot-shared.ts      # Shared Copilot helpers (model inference, token fallback, dedup)
+│   │   ├── copilot-session-store.ts
+│   │   ├── copilot-events-jsonl.ts
+│   │   └── vscode-chat-debug.ts
 │   ├── redaction/
-│   │   ├── index.ts           # Redaction engine
-│   │   ├── patterns.ts        # Regex patterns for sensitive data
-│   │   ├── retention.ts       # Data retention policies
-│   │   └── export-config.ts   # Policy configuration export
+│   │   ├── index.ts               # Redaction engine
+│   │   ├── patterns.ts            # Regex patterns for sensitive data
+│   │   ├── retention.ts           # Data retention policies
+│   │   └── export-config.ts       # Policy configuration export
 │   └── schema/
-│       ├── index.ts           # Schema validation + facet building
-│       └── schema.ts          # Zod type definitions (EVENT_TYPES, facets, etc.)
+│       ├── index.ts               # Schema validation + facet building
+│       └── schema.ts              # Zod type definitions (EVENT_TYPES, facets, etc.)
 ├── test/
-│   └── local-datastore.test.ts # Integration tests (SQLite import, summary)
-├── coverage/                   # v8 coverage reports
+│   └── local-datastore.test.ts    # Integration tests (SQLite import, summary)
+├── docs/
+│   ├── ADR-001-append-only-jsonl.md
+│   ├── ADR-002-provider-isolation.md
+│   ├── ADR-003-copilot-inference-and-dedup.md
+│   ├── ADR-004-enrichment-pipeline.md           # design only
+│   ├── ADR-005-sink-interface.md                # design only
+│   ├── ADR-006-policy-based-redaction.md        # design only
+│   └── providers/
+│       ├── copilot-session-store.md
+│       ├── copilot-events-jsonl.md
+│       └── vscode-chat-debug.md
 ├── .github/
 │   ├── workflows/
-│   │   └── ci.yml            # GitHub Actions CI (multiplatform test)
-│   └── skills/               # Future: agent customization
+│   │   ├── ci.yml                 # Multiplatform test matrix
+│   │   └── release.yml            # npm publish on tag push
+│   └── skills/                    # Forge skills for PRD / feature decomposition / agent team build
+├── CHANGELOG.md
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts
-└── PRD.md                     # This document
+└── PRD.md                         # This document
+```
 
 **Future (v0.5+):**
 ```
@@ -336,8 +366,18 @@ copilot-trace-importer/
 
 | Function | Signature | Purpose |
 |----------|-----------|---------|
-| `importCopilotSessionStore(options)` | `(opts: CopilotSessionStoreImportOptions) ⇒ Promise<DatastoreImportResult>` | Core import logic; returns counts, sessions, machines |
+| `importCopilotSessionStore(options)` | `(opts: CopilotSessionStoreImportOptions) ⇒ Promise<DatastoreImportResult>` | Core import logic; returns counts (including `deduplicatedEvents`), sessions, machines |
 | `summarizeDatastore(path, options)` | `(path: string, opts?: DatastoreSummaryOptions) ⇒ Promise<DatastoreSummary>` | Aggregate datastore; return counts, facets, date range |
+| `getCopilotSessionRows(options)` | `(opts: CopilotSessionStoreReadOptions) ⇒ Promise<CopilotSessionRow[]>` | Read raw session rows from `~/.copilot/session-store.db` for tooling/inspection |
+
+**Provider Interface (Current, from `src/providers/types.ts` — ADR-002):**
+
+| Member | Signature | Purpose |
+|--------|-----------|---------|
+| `Provider.name` | `string` | Stable identifier (e.g. `copilot-session-store`) |
+| `Provider.description` | `string` | Human-readable summary used in `--help` and logs |
+| `Provider.import(options, ctx)` | `(opts, ctx: ProviderImportContext) ⇒ Promise<ProviderImportResult>` | Discover, parse, normalize, dedup; return envelopes for the orchestrator to append |
+| `BUILTIN_PROVIDERS` | `readonly Provider[]` | Registry of built-in providers; adding a new source = one import + one entry |
 
 **Data Structures (Current):**
 
@@ -400,6 +440,17 @@ interface RedactionPolicy {
 | FR-07 | Batch import for bulk datastores (100K+ events) with progress reporting | Should |
 | FR-08 | Support streaming import to backend API (real-time push) | Should |
 
+### 8.1.1 Provider Architecture (ADR-002, ADR-003)
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-08a | Each source MUST live in its own file under `src/providers/` implementing the `Provider` interface; the orchestrator MUST NOT contain source-specific parsing logic | Must |
+| FR-08b | Every provider MUST have a quirks doc under `docs/providers/<name>.md` capturing format gotchas and codeburn cross-references | Must |
+| FR-08c | New providers MUST be registered in `BUILTIN_PROVIDERS` (single import + single registry entry) with no orchestrator changes | Must |
+| FR-08d | Copilot events MUST infer model family from tool-call ID prefixes (`toolu_*` → `anthropic`, `call_*` → `openai`) when no explicit model is present; inferred values MUST carry `confidence: "heuristic"` and MUST NOT overwrite explicit values | Must |
+| FR-08e | When `outputTokens` is missing but message body text is present, the importer MUST estimate `ceil(text.length / 4)` and mark the value as a fallback | Must |
+| FR-08f | Copilot events MUST be deduplicated within a single import pass by `messageId`, falling back to `interactionId + firstToolCallId + sourceEventType` hash; the number dropped MUST be exposed as `DatastoreImportResult.deduplicatedEvents` | Must |
+
 ### 8.2 Schema & Normalization
 
 | ID | Requirement | Priority |
@@ -459,6 +510,20 @@ interface RedactionPolicy {
 | FR-36 | Azure SQL: configurable table schema for event storage and aggregations | Should |
 | FR-37 | Azure Fabric: export aggregated metrics for BI dashboards | Could |
 | FR-38 | Support for other cloud providers (AWS S3+Athena, GCP BigQuery) | Could |
+
+### 8.8 Codeburn Alignment (Roadmap)
+
+These requirements track the explicit "feed codeburn, don't compete with codeburn" commitment from the README and §3.2. They are sized so that every implementation phase delivers something codeburn-aligned.
+
+| ID | Requirement | Priority | Phase |
+|----|-------------|----------|-------|
+| FR-39 | Maintain per-provider quirks docs under `docs/providers/<name>.md` cross-referencing codeburn's equivalent parser when one exists | Must | Phase 2 |
+| FR-40 | Implement the **Enrichment Pipeline** (ADR-004) so codeburn-style fields (model family, normalized token counts, fallback flags) are produced once and reused by every sink | Should | Phase 3 |
+| FR-41 | Implement the **Sink Interface** (ADR-005) so JSONL, codeburn-export, OTLP, Parquet and warehouse sinks share one contract | Must | Phase 4 |
+| FR-42 | Ship a first-party **`codeburn-export` sink** that emits our normalized JSONL in a shape codeburn (or a codeburn-compatible consumer) can ingest directly, with redaction already applied | Should | Phase 4 |
+| FR-43 | Ship **policy-based redaction** (ADR-006) with strict / moderate / permissive presets so codeburn-style developer dashboards can run on data that has already been redacted to the org's policy | Should | Phase 5 |
+| FR-44 | Ship a **codeburn-style analyzer pack** (cost, model mix, tool frequency, top files) that runs over our JSONL — making codeburn-style insights available across *every* provider we ingest, with redaction already applied | Should | Phase 6 |
+| FR-45 | Document a **community redaction-policy and analyzer marketplace** including codeburn-compatible bundles, so community-authored codeburn-style insights can be shared without re-implementing the pipeline | Could | Phase 7 |
 
 ---
 
@@ -616,47 +681,79 @@ Persisted → Watch FS → Stream to Backend → Index/Aggregate → Alert if th
 ### Phase 1: Stabilize v0.1.0 (Current)
 - [x] Fix Windows path comparison (case-insensitive)
 - [x] Ensure SQLite tests run on all platforms
+- [x] Provider-isolated architecture (ADR-002) extracted from monolithic `src/index.ts`
+- [x] Copilot model inference, char-based token fallback, per-pass dedup (ADR-003)
+- [x] `--version` / `-v` CLI flag
+- [x] Release workflow (`.github/workflows/release.yml`) publishing to npm on tag push
+- [x] CHANGELOG.md + ADRs 002–006 written
 - [ ] Expand unit tests for redaction patterns
 - [ ] Document schema stability guarantees
 - [ ] Publish npm package
+- **Codeburn alignment:** adopt codeburn's per-provider file/doc layout (done in ADR-002); cross-reference codeburn's Copilot parser in `docs/providers/copilot-events-jsonl.md`; credit codeburn for the inference / token-fallback / dedup heuristics in ADR-003 and README.
 
 ### Phase 2: Core Library & Programmatic API (v0.3)
 - [ ] Extract core logic into separate npm package (`@copilot-trace/core`)
-- [ ] Finalize library API (import, summary, redaction)
+- [ ] Finalize library API (import, summary, redaction, providers)
 - [ ] Add plugin hook system (custom facet extractors)
+- [ ] Add Phase 2 providers: Claude Code, Cursor, Codex (each in its own `src/providers/<tool>.ts` with its own quirks doc)
 - [ ] Write library documentation and examples
+- **Codeburn alignment (FR-39):** every new provider ships with a `docs/providers/<name>.md` quirks doc that explicitly cross-references codeburn's equivalent parser and notes where we diverged and why.
 
 ### Phase 3: Real-Time Streaming (v0.5)
+- [ ] Implement Enrichment Pipeline (ADR-004) so derived fields (model family, normalized tokens, fallback flags, cost-ready facets) are computed once
 - [ ] Implement file watcher for datastore changes
 - [ ] Build backend API (Node.js/Express REST endpoints)
 - [ ] Datastore → Backend streaming (buffered, batched)
 - [ ] Basic HTTP API for session and summary queries
 - [ ] Deploy to development environment (local Docker)
+- **Codeburn alignment (FR-40):** enrichment produces the same normalized fields a codeburn-style consumer expects (model family, input/output token counts with `fallback` provenance, tool category) so downstream codeburn-style analyzers don't have to re-derive them.
 
 ### Phase 4: Cloud Integration (v0.7)
+- [ ] Implement Sink Interface (ADR-005) — one contract for JSONL, OTLP, Parquet, warehouse, and codeburn-export sinks
+- [ ] Ship first-party **`codeburn-export` sink** (FR-42)
 - [ ] Azure Cosmos DB schema and indexes
 - [ ] Azure SQL option with aggregation tables
 - [ ] Backend persists events to cloud database
 - [ ] Performance testing at scale (1M+ events)
+- **Codeburn alignment (FR-41, FR-42):** the codeburn-export sink is the canonical "we feed codeburn" deliverable — redaction already applied, one CLI invocation, no codeburn-side changes required.
 
 ### Phase 5: Web UI (v0.8)
+- [ ] Ship Policy-Based Redaction (ADR-006) with strict / moderate / permissive presets
 - [ ] React scaffolding + TypeScript setup
 - [ ] Dashboard, sessions, tokens views (basic charts)
 - [ ] Filters (date, machine, session, facet)
 - [ ] Export functionality (CSV, JSON)
+- **Codeburn alignment (FR-43):** our web UI does *not* try to replace codeburn for the developer-cost-dashboard use case — it focuses on governance views (redaction status, provenance, retention, audit). The shipped redaction presets are what makes codeburn safe to point at our datastore in regulated orgs.
 
 ### Phase 6: Observability & Alerts (v0.9)
 - [ ] Configurable threshold rules (e.g., token spike > 50% avg)
 - [ ] Teams/Slack notification integration
 - [ ] Alert history and configuration UI
 - [ ] Audit logs for team deployments
+- [ ] Ship **codeburn-style analyzer pack** over our JSONL (cost, model mix, tool frequency, top files)
+- **Codeburn alignment (FR-44):** analyzers re-create codeburn's most useful insights across *every* provider we ingest (Copilot, Claude Code, Cursor, Codex, …), running on already-redacted data — closing the regulated-org gap codeburn alone cannot.
 
 ### Phase 7: Stability & Scale (v1.0)
 - [ ] Performance testing at scale (TB datastores)
 - [ ] Full GDPR/SOC2 documentation
 - [ ] Production deployment guide (Kubernetes, Azure AKS)
-- [ ] Redaction policy marketplace (share community policies)
+- [ ] Redaction policy marketplace (share community policies, including codeburn-compatible bundles)
 - [ ] Research plugin system operational
+- **Codeburn alignment (FR-45):** marketplace explicitly accepts codeburn-compatible analyzer/policy bundles; upstream-friendly fixes from our parsers get offered back to codeburn where they apply.
+
+### 14.8 Codeburn Alignment Matrix
+
+Single source of truth for the codeburn-alignment commitment per phase. Every row MUST have an owning FR and ship in the phase listed.
+
+| Phase | Version | Codeburn-alignment deliverable | Owning FR | Status |
+|-------|---------|--------------------------------|-----------|--------|
+| 1 | v0.2.0 | Adopt codeburn's provider-isolation pattern; credit codeburn heuristics in ADR-003 / README | (ADR-002, ADR-003) | ✅ Done |
+| 2 | v0.3.0 | Per-provider quirks docs cross-referencing codeburn's parsers for every new source (Claude Code, Cursor, Codex) | FR-39 | Planned |
+| 3 | v0.5.0 | Enrichment pipeline produces codeburn-compatible normalized fields | FR-40 | Planned |
+| 4 | v0.7.0 | Sink interface + first-party `codeburn-export` sink | FR-41, FR-42 | Planned |
+| 5 | v0.8.0 | Policy-based redaction presets so codeburn can safely consume our datastore in regulated orgs | FR-43 | Planned |
+| 6 | v0.9.0 | Codeburn-style analyzer pack over our JSONL (cost, model mix, tool frequency, top files) across every provider | FR-44 | Planned |
+| 7 | v1.0.0 | Community marketplace accepting codeburn-compatible analyzer/policy bundles; upstream contributions back to codeburn where applicable | FR-45 | Planned |
 
 ---
 
@@ -822,4 +919,5 @@ Persisted → Watch FS → Stream to Backend → Index/Aggregate → Alert if th
 ## Document Change Log
 
 - **v1.0 (2026-05-13)**: Initial comprehensive PRD based on v0.1.0 implementation and team Q&A; aligned with roadmap for real-time, cloud, and web UI features.
+- **v1.1 (2026-05-17)**: Synced with v0.2.0 (Unreleased) — provider-isolated architecture (ADR-002), Copilot model inference / token fallback / dedup (ADR-003), enrichment / sink / policy-redaction designs (ADR-004/005/006), `--version` flag, release workflow. Added §8.1.1 Provider Architecture requirements, §8.8 Codeburn Alignment requirements (FR-39…FR-45), per-phase codeburn-alignment bullets in §14, and new §14.8 Codeburn Alignment Matrix.
 
