@@ -9,6 +9,7 @@ ADRs document significant architectural decisions, their rationale, and tradeoff
 ### Current ADRs
 
 - **[ADR-001: Append-Only JSONL Datastore Format](ADR-001-append-only-jsonl.md)** — Rationale for JSONL vs. SQLite/Parquet/CSV; streaming-ready design for v0.5+ real-time features
+- **[ADR-002: Real-Time Streaming Backend Architecture](ADR-002-real-time-streaming.md)** *(Proposed)* — Tail-the-JSONL + pluggable HTTP NDJSON sinks for the v0.5 streaming pipeline
 
 ### ADR Process
 
@@ -49,7 +50,7 @@ These ADRs are planned for upcoming phases:
 
 | ADR | Title | Phase | Status |
 |-----|-------|-------|--------|
-| ADR-002 | Real-Time Streaming Backend Architecture | v0.5 | Proposed |
+| ADR-002 | Real-Time Streaming Backend Architecture | v0.5 | Proposed (drafted) |
 | ADR-003 | Configurable Redaction Policies | v0.5 | Proposed |
 | ADR-004 | Schema Versioning and Migration | v1.0 | Proposed |
 | ADR-005 | Multi-Tenancy for Team Deployments | v0.9 | Proposed |
