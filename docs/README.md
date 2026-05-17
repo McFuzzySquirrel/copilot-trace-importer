@@ -9,6 +9,17 @@ ADRs document significant architectural decisions, their rationale, and tradeoff
 ### Current ADRs
 
 - **[ADR-001: Append-Only JSONL Datastore Format](ADR-001-append-only-jsonl.md)** — Rationale for JSONL vs. SQLite/Parquet/CSV; streaming-ready design for v0.5+ real-time features
+- **[ADR-002: Provider Isolation Pattern](ADR-002-provider-isolation.md)** — One file per source under `src/providers/`; uniform `Provider` interface; deliberate non-unification of parsers
+- **[ADR-003: Copilot Model Inference, Token Fallback, Deduplication](ADR-003-copilot-inference-and-dedup.md)** — Tool-call ID prefix → model family; `CHARS_PER_TOKEN = 4` output-token fallback; per-pass dedup via `messageId`
+- **[ADR-004: Enrichment Pipeline](ADR-004-enrichment-pipeline.md)** — Design only; implementation deferred to Phase 3 (cost + classifier enrichers)
+- **[ADR-005: Sink Interface](ADR-005-sink-interface.md)** — Design only; implementation deferred to Phase 4 (DuckDB / OTLP / Postgres + `watch` mode)
+- **[ADR-006: Policy-Based Redaction](ADR-006-policy-based-redaction.md)** — Design only; implementation deferred to Phase 5 (tiered policies, custom patterns, redaction report, `prune`)
+
+### Per-provider quirks docs
+
+- **[copilot-session-store](providers/copilot-session-store.md)** — SQLite session metadata
+- **[copilot-events-jsonl](providers/copilot-events-jsonl.md)** — Per-session events.jsonl (where the Copilot model-inference and dedup live)
+- **[vscode-chat-debug](providers/vscode-chat-debug.md)** — VS Code GitHub Copilot Chat debug logs
 
 ### ADR Process
 
@@ -49,11 +60,10 @@ These ADRs are planned for upcoming phases:
 
 | ADR | Title | Phase | Status |
 |-----|-------|-------|--------|
-| ADR-002 | Real-Time Streaming Backend Architecture | v0.5 | Proposed |
-| ADR-003 | Configurable Redaction Policies | v0.5 | Proposed |
-| ADR-004 | Schema Versioning and Migration | v1.0 | Proposed |
-| ADR-005 | Multi-Tenancy for Team Deployments | v0.9 | Proposed |
-| ADR-006 | Cloud Database Selection (Azure Cosmos vs. SQL vs. Fabric) | v0.7 | TBD |
+| ADR-007 | Real-Time `watch` mode + streaming backend | v0.5 | Proposed |
+| ADR-008 | Schema versioning and migration | v1.0 | Proposed |
+| ADR-009 | Multi-tenancy for team deployments | v0.9 | Proposed |
+| ADR-010 | Analyzer SDK and plugin packaging | v0.8 | Proposed |
 
 ---
 

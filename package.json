@@ -8,13 +8,21 @@
   "bin": {
     "copilot-trace-importer": "dist/bin/ingest.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "PRD.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "datastore:import": "tsx bin/ingest.ts import",
-    "datastore:summary": "tsx bin/ingest.ts summary"
+    "datastore:summary": "tsx bin/ingest.ts summary",
+    "version:print": "node -p \"require('./package.json').version\""
   },
   "engines": {
     "node": ">=22"
