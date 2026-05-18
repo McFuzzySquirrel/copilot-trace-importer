@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "last_verified": "2026-05-18T14:40:54Z",
+  "ollama": {
+    "available": false,
+    "reason": "User explicitly scoped this run to GitHub Copilot Pro+ subscription models only."
+  },
+  "byok_provider": {
+    "available": false,
+    "reason": "Not in scope for this run."
+  },
+  "copilot_subscription": {
+    "plan": "Pro+",
+    "source": "User-confirmed against the GitHub Copilot model picker available in this environment (2026-05-18).",
+    "note": "All Copilot-exposed models are treated as tool-calling capable. Re-verify against the live model picker before relying on this inventory beyond ~7 days.",
+    "models": [
+      { "id": "claude-opus-4.5",  "tier_hint": "reasoning", "tool_calling": true, "notes": "Strongest reasoning + safety; premium request cost." },
+      { "id": "claude-opus-4.7",  "tier_hint": "reasoning", "tool_calling": true, "notes": "Newer Opus revision; treat as Opus-class." },
+      { "id": "gpt-5.5",          "tier_hint": "reasoning", "tool_calling": true, "notes": "Top-tier OpenAI reasoning model on the Pro+ picker." },
+      { "id": "gpt-5.4",          "tier_hint": "reasoning", "tool_calling": true, "notes": "Strong reasoning, slightly cheaper than 5.5." },
+      { "id": "gemini-2.5-pro",   "tier_hint": "reasoning", "tool_calling": true, "notes": "Large context window; reasoning-tier alternative." },
+
+      { "id": "claude-sonnet-4.5","tier_hint": "balanced",  "tool_calling": true, "notes": "Default workhorse: strong code-gen + tool use at moderate cost." },
+      { "id": "claude-sonnet-4.6","tier_hint": "balanced",  "tool_calling": true, "notes": "Newer Sonnet revision; treat as Sonnet-class." },
+      { "id": "gpt-5.2-codex",    "tier_hint": "balanced",  "tool_calling": true, "notes": "Code-tuned GPT-5; good for heavy code-gen agents." },
+      { "id": "gpt-5.3-codex",    "tier_hint": "balanced",  "tool_calling": true, "notes": "Newer codex revision." },
+      { "id": "gpt-5.2",          "tier_hint": "balanced",  "tool_calling": true, "notes": "General-purpose balanced tier." },
+      { "id": "gpt-5.4-mini",     "tier_hint": "balanced",  "tool_calling": true, "notes": "Mini variant of 5.4; cheap balanced option." },
+      { "id": "gpt-4.1",          "tier_hint": "balanced",  "tool_calling": true, "notes": "Reliable balanced fallback; unlimited on Pro+." },
+
+      { "id": "claude-haiku-4.5", "tier_hint": "fast",      "tool_calling": true, "notes": "Fast/cheap for light prose + small edits." },
+      { "id": "gpt-5-mini",       "tier_hint": "fast",      "tool_calling": true, "notes": "Low-cost OpenAI option for light tasks." }
+    ]
+  }
+}
